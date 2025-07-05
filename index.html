@@ -6,172 +6,71 @@
   <title>Controle Financeiro</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial; margin: 20px; background: #f5f5f5; }
-    section { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    input, select { margin: 5px 0; padding: 8px; width: 100%; }
-    button { padding: 10px; margin-top: 10px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f3f4f6; padding: 20px; }
+    h1 { color: #111827; text-align: center; margin-bottom: 30px; }
+    section { background: #ffffff; padding: 20px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); }
+    input, select, button {
+      width: 100%; padding: 10px; margin-top: 10px; border-radius: 5px; border: 1px solid #d1d5db;
+    }
+    button { background-color: #2563eb; color: white; border: none; cursor: pointer; transition: background 0.3s ease; }
+    button:hover { background-color: #1d4ed8; }
+    ul { list-style-type: none; padding: 0; }
+    li { margin-top: 5px; background: #f9fafb; padding: 10px; border-radius: 5px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   </style>
 </head>
 <body>
-  <h1>Financeiro Pessoal</h1>
+  <h1>Controle Financeiro</h1>
 
-  <section>
-    <h2>Receita / Despesa</h2>
-    <input id="nome" placeholder="Nome">
-    <input id="valor" type="number" placeholder="Valor">
-    <select id="tipo">
-      <option value="receita">Receita</option>
-      <option value="despesa">Despesa</option>
-    </select>
-    <select id="forma">
-      <option value="credito">Cartão de Crédito</option>
-      <option value="debito">Cartão de Débito</option>
-      <option value="dinheiro">Dinheiro</option>
-    </select>
-    <input id="parcelas" type="number" placeholder="Parcelas (1 se à vista)" value="1">
-    <input id="cartao-nome" placeholder="Nome do Cartão (opcional)">
-    <button id="adicionar-lancamento">Adicionar</button>
+  <section class="grid">
+    <div>
+      <h2>Lançamento</h2>
+      <input id="nome" placeholder="Nome">
+      <input id="valor" type="number" placeholder="Valor">
+      <select id="tipo">
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+      <select id="forma">
+        <option value="credito">Cartão de Crédito</option>
+        <option value="debito">Cartão de Débito</option>
+        <option value="dinheiro">Dinheiro</option>
+      </select>
+      <input id="parcelas" type="number" placeholder="Parcelas (1 se à vista)" value="1">
+      <select id="cartao-nome"></select>
+      <button id="adicionar-lancamento">Adicionar Lançamento</button>
+    </div>
+    <div>
+      <h2>Cadastrar Cartão</h2>
+      <input id="cartao-novo-nome" placeholder="Nome do cartão">
+      <input id="cartao-saldo" type="number" placeholder="Saldo atual">
+      <select id="cartao-tipo">
+        <option value="credito">Crédito</option>
+        <option value="debito">Débito</option>
+        <option value="ambos">Crédito e Débito</option>
+      </select>
+      <button id="adicionar-cartao">Cadastrar Cartão</button>
+    </div>
   </section>
 
   <section>
     <h2>Cartões</h2>
-    <input id="cartao-novo-nome" placeholder="Nome do cartão">
-    <input id="cartao-saldo" type="number" placeholder="Saldo atual">
-    <button id="adicionar-cartao">Cadastrar Cartão</button>
     <ul id="lista-cartoes"></ul>
   </section>
 
   <section>
-    <h2>Resumo e Metas</h2>
-    <label>Data alvo (para metas):</label>
-    <input id="data-alvo" type="date">
+    <h2>Resumo do Mês Atual</h2>
+    <input id="data-alvo" type="month">
     <div id="resumo"></div>
     <canvas id="graficoResumo" width="300" height="300"></canvas>
   </section>
 
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getFirestore, collection, addDoc, getDocs, setDoc, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  <section>
+    <h2>Lançamentos Detalhados</h2>
+    <div id="tabela-lancamentos"></div>
+  </section>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBqlAO_ZyNmsdA1ouhK6ckaxWqkROIyu7c",
-      authDomain: "financeirodaobra-7aacc.firebaseapp.com",
-      projectId: "financeirodaobra-7aacc",
-      storageBucket: "financeirodaobra-7aacc.firebasestorage.app",
-      messagingSenderId: "1003037768066",
-      appId: "1:1003037768066:web:d791f19792e79b6109b79b"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-
-    const lancamentoBtn = document.getElementById('adicionar-lancamento');
-    const cartaoBtn = document.getElementById('adicionar-cartao');
-    let grafico;
-
-    async function atualizarResumo() {
-      const receitasSnap = await getDocs(collection(db, 'lancamentos'));
-      let totalReceitas = 0, totalDespesas = 0;
-
-      receitasSnap.forEach(doc => {
-        const d = doc.data();
-        if (d.tipo === 'receita') totalReceitas += d.valor;
-        else totalDespesas += d.valor;
-      });
-
-      const saldo = totalReceitas - totalDespesas;
-      const dataAlvo = document.getElementById('data-alvo').value;
-      const diasRestantes = dataAlvo ? Math.max((new Date(dataAlvo) - new Date()) / (1000 * 60 * 60 * 24), 1) : 1;
-      const meta = saldo < 0 ? Math.abs(saldo) / diasRestantes : 0;
-
-      document.getElementById('resumo').innerHTML = `
-        <p>Total de Receitas: R$ ${totalReceitas.toFixed(2)}</p>
-        <p>Total de Despesas: R$ ${totalDespesas.toFixed(2)}</p>
-        <p>Saldo Atual: R$ ${saldo.toFixed(2)}</p>
-        <p>Meta Diária: R$ ${meta.toFixed(2)}</p>
-      `;
-
-      desenharGrafico(totalReceitas, totalDespesas);
-    }
-
-    function desenharGrafico(receitas, despesas) {
-      const ctx = document.getElementById('graficoResumo').getContext('2d');
-      if (grafico) grafico.destroy();
-      grafico = new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Receitas', 'Despesas'],
-          datasets: [{
-            label: 'Resumo Financeiro',
-            data: [receitas, despesas],
-            backgroundColor: ['#4CAF50', '#F44336'],
-            borderWidth: 1
-          }]
-        }
-      });
-    }
-
-    lancamentoBtn.addEventListener('click', async () => {
-      const nome = document.getElementById('nome').value;
-      const valor = parseFloat(document.getElementById('valor').value);
-      const tipo = document.getElementById('tipo').value;
-      const forma = document.getElementById('forma').value;
-      const parcelas = parseInt(document.getElementById('parcelas').value);
-      const cartaoNome = document.getElementById('cartao-nome').value;
-
-      for (let i = 0; i < parcelas; i++) {
-        const vencimento = new Date();
-        vencimento.setMonth(vencimento.getMonth() + i);
-        await addDoc(collection(db, 'lancamentos'), {
-          nome, valor: valor / parcelas, tipo, forma, parcelas, cartaoNome,
-          vencimento: vencimento.toISOString().split('T')[0]
-        });
-      }
-
-      if (forma === 'credito' && cartaoNome) {
-        const cartaoRef = doc(db, 'cartoes', cartaoNome);
-        const cartaoSnap = await getDocs(collection(db, 'cartoes'));
-        let cartaoExiste = false;
-
-        cartaoSnap.forEach(async d => {
-          if (d.id === cartaoNome) {
-            cartaoExiste = true;
-            const atual = d.data().faturaAtual || 0;
-            await updateDoc(cartaoRef, { faturaAtual: atual + valor });
-          }
-        });
-
-        if (!cartaoExiste) {
-          await setDoc(cartaoRef, { nome: cartaoNome, faturaAtual: valor });
-        }
-      }
-
-      alert('Lançamento registrado.');
-      atualizarResumo();
-    });
-
-    cartaoBtn.addEventListener('click', async () => {
-      const nome = document.getElementById('cartao-novo-nome').value;
-      const saldo = parseFloat(document.getElementById('cartao-saldo').value);
-      await setDoc(doc(db, 'cartoes', nome), { nome, saldo, faturaAtual: 0 });
-      alert('Cartão cadastrado!');
-      atualizarCartoes();
-    });
-
-    async function atualizarCartoes() {
-      const snap = await getDocs(collection(db, 'cartoes'));
-      const lista = document.getElementById('lista-cartoes');
-      lista.innerHTML = '';
-      snap.forEach(doc => {
-        const c = doc.data();
-        lista.innerHTML += `<li><b>${c.nome}</b>: Saldo R$ ${c.saldo.toFixed(2)} | Fatura: R$ ${c.faturaAtual?.toFixed(2) || 0}</li>`;
-      });
-    }
-
-    document.getElementById('data-alvo').addEventListener('change', atualizarResumo);
-
-    atualizarResumo();
-    atualizarCartoes();
-  </script>
+  <script type="module" src="./script.js"></script>
 </body>
 </html>
